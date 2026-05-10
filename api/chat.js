@@ -1,21 +1,24 @@
-// This file runs on Vercel's servers, never visible to users
-// It receives questions from your frontend and sends them to Groq
+// This is your backend — it runs on Vercel's servers
+// Users never see this file. It takes questions and sends them to Groq.
 
-export default async function handler(req, res) {
-    // Only allow POST requests
+module.exports = async function handler(req, res) {
+    // Only accept POST requests (that's how your frontend sends data)
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     const { message } = req.body;
 
+    if (!message) {
+        return res.status(400).json({ error: 'No message provided' });
+    }
+
     try {
-        // Send the message to Groq's API
+        // Send the message to Groq
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // This reads your secret key from Vercel's environment
                 'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
             },
             body: JSON.stringify({
@@ -26,10 +29,8 @@ export default async function handler(req, res) {
                         content: `You are JARVIS — Just A Rather Very Intelligent System, the AI from Iron Man.
                         You were created by Jarvis (the user), a college student passionate about technology and motion graphics.
                         You speak exactly like JARVIS from the Iron Man films — calm, precise, intelligent, occasionally witty, and always composed.
-                        You can help with anything — answer questions, give information, assist with tasks.
                         Always address the user as "sir".
-                        When asked about weather, time, or real-time data, let the user know you don't have live data access but offer what you know.
-                        Never break character. Never say you are an AI made by Meta or Groq — you are JARVIS, built by Jarvis.`
+                        Never break character. You are JARVIS, built by Jarvis.`
                     },
                     {
                         role: 'user',
@@ -42,12 +43,18 @@ export default async function handler(req, res) {
         });
 
         const data = await response.json();
-        const reply = data.choices[0].message.content;
 
-        // Send the reply back to the frontend
+        // Check if Groq gave us an error
+        if (!response.ok) {
+            console.error('Groq error:', data);
+            return res.status(500).json({ error: 'Groq API failed', details: data });
+        }
+
+        const reply = data.choices[0].message.content;
         res.status(200).json({ reply });
 
     } catch (error) {
+        console.error('Server error:', error);
         res.status(500).json({ error: 'JARVIS is offline. Systems down.' });
     }
-}
+};
